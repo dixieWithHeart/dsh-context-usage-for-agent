@@ -55,7 +55,7 @@ HTTP 路由（供设置页使用，无鉴权，与 `dsh-auto-continue` 同款）
 ## 验证
 
 ```powershell
-node .\tools\test-context-usage.mjs            # 50 条契约断言
+node .\tools\test-context-usage.mjs            # 56 条契约断言
 node --check index.js; node --check client.js  # 语法
 ```
 

@@ -259,18 +259,17 @@ export function apply (ctx, config) {
       active: settings.enabled && settings.injectPerTurn,
       hasSession: Boolean(lastSession),
       lastLine: lastInjectedText,
-      lastTurn: lastInjectedTurn,
+      lastTurn: injectedTurn,
       /** 按当前设置与当前会话数据会生成的句子；还没有 provider 数据时为 null。 */
       sampleLine: shortLine(state),
     }
   }
 
   // ── 每轮自动附加读数 ────────────────────────────────────────────────────
+  /** 已注入过的回合号；同时供设置页显示"最近一次注入发生在哪一回合"。 */
   let injectedTurn = null
   /** 最近一次真实注入的完整句子，供设置页展示。 */
   let lastInjectedText = null
-  /** 最近一次真实注入的回合号。 */
-  let lastInjectedTurn = null
 
   ctx.on('tools/pre-execute', (exec, next) => {
     try {
@@ -285,7 +284,6 @@ export function apply (ctx, config) {
           if (text) {
             injectedTurn = turn
             lastInjectedText = text
-            lastInjectedTurn = turn
             deliver(agent, text).catch((e) => log.warn(`inject failed: ${e && e.message ? e.message : e}`))
           }
         }
@@ -319,7 +317,7 @@ export function apply (ctx, config) {
               res.writeHead(405); res.end()
               return
             }
-            res.writeHead(200, { 'content-type': 'application/json' })
+            res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
             res.end(JSON.stringify({
               version: VERSION,
               settings: {
@@ -362,7 +360,7 @@ export function apply (ctx, config) {
               }
               log.info(`settings updated: ${JSON.stringify(settings)}`)
             }
-            res.writeHead(200, { 'content-type': 'application/json' })
+            res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
             res.end(JSON.stringify({ ok: true, changed, settings, inject: injectPayload() }))
           },
         },
