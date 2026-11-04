@@ -1,4 +1,4 @@
-// @local/dsh-context-usage — 浏览器半 / browser half
+// dsh-context-usage — 浏览器半 / browser half
 //
 // 注册一个设置页（settings.section）。这个插件的定位是让 Agent 能读到自己的上下文，
 // 用户侧的占用显示由聊天框下方承担，所以本页不预览占用容量，只做两件事：
@@ -11,7 +11,7 @@
 //   样式只用 --dsw-alias-* 主题 token，且都带 fallback
 
 window.__ModuleLoader__.load({
-  id: '@local/dsh-context-usage-for-agent',
+  id: 'dsh-context-usage-for-agent',
   factory: (require) => {
     const React = require('react')
     const h = React.createElement

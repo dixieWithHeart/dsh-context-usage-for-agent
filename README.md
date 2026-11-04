@@ -1,4 +1,4 @@
-# @local/dsh-context-usage-for-agent（上下文自知）
+# dsh-context-usage-for-agent（上下文自知）
 
 显示 DSH 会话的上下文占用，三处呈现：
 
@@ -7,6 +7,14 @@
    `[ctx 17.7%] 177k/1.00M · 缓存 99.4% · 余 823k` 的极短文本。
    运行中的 Agent 走 `steer`（下一步即可读到，不新开回合），空闲的走 `inject`（静默、不唤醒、不计费）。
 3. **设置页**（设置 → 上下文自知）—— 注入开关、可自定义模板、占位符面板与实时预览。
+
+## 安装
+
+```powershell
+dsh plugin add dsh-context-usage-for-agent
+```
+
+装完刷新页面，在「设置 → 上下文自知」里开关每轮注入、改模板。工具 `context_usage` 立刻可用。
 
 ## 目录结构
 

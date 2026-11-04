@@ -19,7 +19,7 @@
  * 不订阅 session/event 自行累加）。pressureTokens 口径与 DSH 内部一致：
  * 未缓存输入 + 缓存读 + 缓存写（不含输出）。
  *
- * @module @local/dsh-context-usage-for-agent
+ * @module dsh-context-usage-for-agent
  */
 
 import { VERSION, PROJECTION_KEY } from './src/constants.js'

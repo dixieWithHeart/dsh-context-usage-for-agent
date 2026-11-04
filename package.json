@@ -1,7 +1,6 @@
 {
-  "name": "@local/dsh-context-usage-for-agent",
+  "name": "dsh-context-usage-for-agent",
   "version": "0.5.1",
-  "private": true,
   "type": "module",
   "description": "显示 DSH 会话的上下文占用：context_usage 工具 + 每轮读数 + 设置页",
   "exports": {
@@ -17,7 +16,8 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "dsh": {
     "bundle": {
@@ -29,5 +29,18 @@
       ],
       "platform": "web"
     }
+  },
+  "license": "MIT",
+  "author": "dixie_2003 (https://github.com/dixieWithHeart)",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "context",
+    "usage",
+    "tokens"
+  ],
+  "engines": {
+    "node": ">=20"
   }
 }
