@@ -23,7 +23,7 @@ export const name = 'context-usage-for-agent'
 /** 依赖的服务：工具注册表 + 会话投影注册表。 */
 export const inject = ['tools', 'sessionProjections']
 
-const VERSION = '0.5.0'
+const VERSION = '0.5.1'
 const PROJECTION_KEY = 'contextUsage'
 const SETTINGS_FILENAME = 'dsh-context-usage.json'
 

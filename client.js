@@ -101,13 +101,20 @@ window.__ModuleLoader__.load({
         border: '1px solid ' + C.border, borderRadius: '6px', background: 'transparent', color: C.text,
         minHeight: '56px', width: '100%', boxSizing: 'border-box',
       },
-      chips: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
-      chip: {
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '12px', padding: '2px 8px', borderRadius: '999px',
-        border: '1px solid ' + C.border, background: 'transparent', color: C.dim, cursor: 'pointer',
-      },
       hint: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
+      headToggle: { display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '14px' },
+      headToggleLabel: { fontSize: '12px', color: C.dim },
+      phList: { display: 'grid', gap: '2px' },
+      phRow: {
+        display: 'flex', gap: '10px', alignItems: 'baseline', padding: '5px 8px',
+        border: '1px solid transparent', background: 'transparent', color: C.text,
+        textAlign: 'left', cursor: 'pointer', borderRadius: '6px', width: '100%',
+      },
+      phKey: {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '12px', color: C.accent, flex: 'none', minWidth: '116px',
+      },
+      phDesc: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
       row: { display: 'flex', alignItems: 'flex-start', gap: '12px', paddingTop: '4px' },
       rowText: { display: 'grid', gap: '2px', flex: 1, minWidth: 0 },
       rowTitle: { fontSize: '13px', fontWeight: 550 },
@@ -164,6 +171,8 @@ window.__ModuleLoader__.load({
       const [tpl, setTpl] = useState(s.settings.template ?? '')
       const [tplDirty, setTplDirty] = useState(false)
       const serverTpl = useRef(s.settings.template ?? '')
+      /** 指向模板 textarea，用于把占位符插到光标处而不是末尾 */
+      const tplRef = useRef(null)
 
       // 轮询不能覆盖用户正在编辑的模板
       useEffect(() => {
@@ -191,6 +200,26 @@ window.__ModuleLoader__.load({
         }
       }, [])
 
+      /** 把 {key} 插入到 textarea 当前光标处（有选区则替换选区），然后把光标放到 token 之后。 */
+      const insertPlaceholder = (key) => {
+        const token = '{' + key + '}'
+        const el = tplRef.current
+        const start = el && typeof el.selectionStart === 'number' ? el.selectionStart : tpl.length
+        const end = el && typeof el.selectionEnd === 'number' ? el.selectionEnd : start
+        const next = tpl.slice(0, start) + token + tpl.slice(end)
+        setTpl(next)
+        setTplDirty(true)
+        // 受控组件要等 React 把新值写回 DOM 之后才能设光标
+        const pos = start + token.length
+        const focusAfter = () => {
+          if (!el) return
+          el.focus()
+          if (typeof el.setSelectionRange === 'function') el.setSelectionRange(pos, pos)
+        }
+        if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(focusAfter)
+        else setTimeout(focusAfter, 0)
+      }
+
       const inject = s.inject || {}
       const injecting = s.settings.enabled && s.settings.injectPerTurn
       const statusText = s.error ? ('连接异常：' + s.error)
@@ -203,10 +232,30 @@ window.__ModuleLoader__.load({
           h('h3', { style: S.title }, '上下文自知'),
           s.version ? h('span', { style: S.badge }, 'v' + s.version) : null,
           h('span', { style: S.status }, statusText),
+          // 总开关在头部，一眼可见、一步可达
+          h('div', { style: S.headToggle },
+            h('span', { style: S.headToggleLabel }, s.settings.enabled ? '已启用' : '已停用'),
+            h(Toggle, {
+              on: s.settings.enabled,
+              label: '启用插件',
+              onChange: (v) => apply({ enabled: v }, v ? '已启用' : '已停用'),
+            }),
+          ),
         ),
         h('p', { style: S.desc },
           '让 Agent 能读到自己的上下文占用：既可以通过 context_usage 工具主动查询，'
           + '也可以在每轮开头自动注入一行读数。你在聊天框下方的占用条由宿主显示，与本插件无关。'),
+
+        h(Row, {
+          title: '每轮把上下文注入到对话中',
+          desc: '开启：每个回合的第一次工具调用前，主动把按模板生成的文案塞进当前回合。'
+            + '关闭：完全不注入，只保留 Agent 主动调用 context_usage 的能力。',
+          control: h(Toggle, {
+            on: s.settings.injectPerTurn,
+            label: '每轮把上下文注入到对话中',
+            onChange: (v) => apply({ injectPerTurn: v }, v ? '已开启每轮注入' : '已关闭每轮注入，仅保留工具查询'),
+          }),
+        }),
 
         h('div', { style: S.panel },
           h('div', { style: S.label }, '按当前设置会注入的句子'),
@@ -223,22 +272,12 @@ window.__ModuleLoader__.load({
             : h('div', { style: S.empty }, '注入已关闭，这里不会有内容；Agent 仍可调用 context_usage 工具。'),
         ),
 
-        h(Row, {
-          title: '每轮把上下文注入到对话中',
-          desc: '开启：每个回合的第一次工具调用前，主动把按模板生成的文案塞进当前回合。'
-            + '关闭：完全不注入，只保留 Agent 主动调用 context_usage 的能力。',
-          control: h(Toggle, {
-            on: s.settings.injectPerTurn,
-            label: '每轮把上下文注入到对话中',
-            onChange: (v) => apply({ injectPerTurn: v }, v ? '已开启每轮注入' : '已关闭每轮注入，仅保留工具查询'),
-          }),
-        }),
-
         // 条件渲染：只有开启每轮注入时才需要编辑模板
         s.settings.injectPerTurn
           ? h('div', { style: S.panel },
             h('div', { style: S.label }, '注入模板　用 {占位符} 取数，留空表示不注入'),
             h('textarea', {
+              ref: tplRef,
               style: S.textarea,
               rows: 3,
               spellCheck: false,
@@ -268,30 +307,22 @@ window.__ModuleLoader__.load({
               }, '恢复默认'),
               tplDirty ? h('span', { style: { fontSize: '12px', color: C.dim } }, '未保存') : null,
             ),
-            h('div', { style: S.label }, '可用占位符（点击插入到末尾）'),
-            h('div', { style: S.chips },
+            h('div', { style: S.label }, '可用占位符（点击插入到光标处）'),
+            h('div', { style: S.phList },
               (s.placeholders || []).map((p) => h('button', {
                 key: p.key,
                 type: 'button',
-                title: p.desc,
-                style: S.chip,
-                onClick: () => { setTpl((prev) => prev + '{' + p.key + '}'); setTplDirty(true) },
-              }, '{' + p.key + '}')),
+                style: S.phRow,
+                onClick: () => insertPlaceholder(p.key),
+              },
+                h('code', { style: S.phKey }, '{' + p.key + '}'),
+                h('span', { style: S.phDesc }, p.desc || ''),
+              )),
             ),
             h('div', { style: S.hint },
               '未知的占位符会原样保留（便于发现拼错）；已知但暂时取不到值的会显示 ?。'),
           )
           : null,
-
-        h(Row, {
-          title: '启用插件',
-          desc: '总开关。关闭后既不注入，也不注册 context_usage 之外的行为（工具本身仍在，仅返回值可能为空）。',
-          control: h(Toggle, {
-            on: s.settings.enabled,
-            label: '启用插件',
-            onChange: (v) => apply({ enabled: v }, v ? '已启用' : '已停用'),
-          }),
-        }),
 
         msg ? h('div', { style: S.msg(msg.bad) }, msg.text) : null,
         h('p', { style: S.foot },
