@@ -118,10 +118,10 @@ window.__ModuleLoader__.load({
       hint: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
       headToggle: { display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '14px' },
       headToggleLabel: { fontSize: '12px', color: C.dim },
-      phList: { display: 'grid', gap: '2px' },
+      phList: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px 14px' },
       phRow: {
         display: 'flex', gap: '10px', alignItems: 'baseline', padding: '5px 8px',
-        border: '1px solid transparent', background: 'transparent', color: C.text,
+        border: 'none', background: 'transparent', color: C.text,
         textAlign: 'left', cursor: 'pointer', borderRadius: '6px', width: '100%',
       },
       phKey: {
@@ -129,9 +129,9 @@ window.__ModuleLoader__.load({
         fontSize: '12px', color: C.accent, flex: 'none', minWidth: '116px',
       },
       phDesc: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
-      phRowHover: { background: C.surface, borderColor: C.border },
-      phKeyHover: { color: C.text },
+      phRowHover: { background: C.surface },
       phHint: { marginLeft: 'auto', fontSize: '11px', color: C.dim, opacity: 0, transition: 'opacity 120ms ease', flex: 'none' },
+      previewBox: { borderLeft: '2px solid ' + C.accent, paddingLeft: '10px', display: 'grid', gap: '6px', marginTop: '4px' },
       row: { display: 'flex', alignItems: 'flex-start', gap: '12px', paddingTop: '4px' },
       rowText: { display: 'grid', gap: '2px', flex: 1, minWidth: 0 },
       rowTitle: { fontSize: '13px', fontWeight: 550 },
@@ -180,13 +180,12 @@ window.__ModuleLoader__.load({
       return h('button', {
         type: 'button',
         style: hot ? { ...S.phRow, ...S.phRowHover } : S.phRow,
+        // 只用 hover：加 onFocus 后点击会留下焦点，边框一直不消失
         onMouseEnter: () => setHot(true),
         onMouseLeave: () => setHot(false),
-        onFocus: () => setHot(true),
-        onBlur: () => setHot(false),
         onClick: () => onPick(pkey),
       },
-        h('code', { style: hot ? { ...S.phKey, ...S.phKeyHover } : S.phKey }, '{' + pkey + '}'),
+        h('code', { style: S.phKey }, '{' + pkey + '}'),
         h('span', { style: S.phDesc }, desc),
         h('span', { style: hot ? { ...S.phHint, opacity: 1 } : S.phHint }, '点击插入'),
       )
@@ -331,6 +330,26 @@ window.__ModuleLoader__.load({
               }, '恢复默认'),
               tplDirty ? h('span', { style: { fontSize: '12px', color: C.dim } }, '未保存') : null,
             ),
+
+            // 实时预览紧贴模板，中间不隔其他内容
+            h('div', { style: S.previewBox },
+              h('div', { style: S.label },
+                '实时预览',
+                h('span', { style: { opacity: 0.7 } }, tplDirty ? '未保存，保存后生效' : '与已保存模板一致'),
+              ),
+              h(Line, {
+                text: livePreview || null,
+                placeholder: inject.values
+                  ? '模板为空，不会注入任何内容'
+                  : (inject.hasSession ? '本会话还没有 provider 上报的用量，下一轮就会生成' : '本会话还没有工具调用记录，暂时无法生成'),
+              }),
+              h('div', { style: S.label },
+                '最近一次实际注入',
+                inject.lastTurn !== null ? h('span', { style: { opacity: 0.8 } }, '（第 ' + inject.lastTurn + ' 回合）') : null,
+              ),
+              h(Line, { text: inject.lastLine, placeholder: '本回合还没到注入时机（注入发生在本轮第一次工具调用前）' }),
+            ),
+
             h('div', { style: S.label }, '可用占位符（点击插入到光标处）'),
             h('div', { style: S.phList },
               (s.placeholders || []).map((p) => h(PhRow, {
@@ -342,27 +361,6 @@ window.__ModuleLoader__.load({
             ),
             h('div', { style: S.hint },
               '未知的占位符会原样保留（便于发现拼错）；已知但暂时取不到值的会显示 ?。'),
-          )
-          : null,
-
-        // 实时预览放在模板下方：改一个字就能看到最终注入的内容
-        s.settings.injectPerTurn
-          ? h('div', { style: S.panel },
-            h('div', { style: S.label },
-              '实时预览',
-              h('span', { style: { opacity: 0.7 } }, tplDirty ? '（未保存，保存后才真正生效）' : '（与已保存模板一致）'),
-            ),
-            h(Line, {
-              text: livePreview || null,
-              placeholder: s.inject && s.inject.values
-                ? '模板为空，不会注入任何内容'
-                : (inject.hasSession ? '本会话还没有 provider 上报的用量，下一轮就会生成' : '本会话还没有工具调用记录，暂时无法生成'),
-            }),
-            h('div', { style: S.label },
-              '最近一次实际注入',
-              inject.lastTurn !== null ? h('span', { style: { opacity: 0.8 } }, '（第 ' + inject.lastTurn + ' 回合）') : null,
-            ),
-            h(Line, { text: inject.lastLine, placeholder: '本回合还没到注入时机（注入发生在本轮第一次工具调用前）' }),
           )
           : null,
 
