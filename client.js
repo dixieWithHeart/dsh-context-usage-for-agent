@@ -26,7 +26,7 @@ window.__ModuleLoader__.load({
       error: null,
       version: '',
       settings: { enabled: true, injectPerTurn: true, template: '', contextWindow: 1000000, compactAtRatio: null },
-      inject: { active: true, hasSession: false, lastLine: null, lastTurn: null, sampleLine: null },
+      inject: { active: true, hasSession: false, lastLine: null, lastTurn: null, sampleLine: null, values: null },
       placeholders: [],
       defaultTemplate: '',
     }
@@ -80,6 +80,20 @@ window.__ModuleLoader__.load({
       radiusSm: 'var(--dsw-radius-sm, 8px)',
     }
 
+    const PLACEHOLDER_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g
+
+    /**
+     * 用宿主给的「已格式化占位符值」渲染模板。
+     * 格式化（k/v 单位、百分比）全在宿主做，前端只做字符串替换，避免两套口径漂移。
+     */
+    function renderPreview (template, values) {
+      if (!template) return ''
+      if (!values) return template
+      return template.replace(PLACEHOLDER_RE, (whole, key) => (
+        Object.hasOwn(values, key) ? values[key] : whole
+      ))
+    }
+
     const S = {
       card: { border: '1px solid ' + C.border, borderRadius: C.radius, padding: '16px 18px', display: 'grid', gap: '14px', color: C.text },
       head: { display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' },
@@ -115,6 +129,9 @@ window.__ModuleLoader__.load({
         fontSize: '12px', color: C.accent, flex: 'none', minWidth: '116px',
       },
       phDesc: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
+      phRowHover: { background: C.surface, borderColor: C.border },
+      phKeyHover: { color: C.text },
+      phHint: { marginLeft: 'auto', fontSize: '11px', color: C.dim, opacity: 0, transition: 'opacity 120ms ease', flex: 'none' },
       row: { display: 'flex', alignItems: 'flex-start', gap: '12px', paddingTop: '4px' },
       rowText: { display: 'grid', gap: '2px', flex: 1, minWidth: 0 },
       rowTitle: { fontSize: '13px', fontWeight: 550 },
@@ -154,6 +171,24 @@ window.__ModuleLoader__.load({
           desc ? h('div', { style: S.rowDesc }, desc) : null,
         ),
         control,
+      )
+    }
+
+    /** 占位符行：hover / 聚焦时整行高亮，并在右侧浮出「点击插入」。 */
+    function PhRow ({ pkey, desc, onPick }) {
+      const [hot, setHot] = useState(false)
+      return h('button', {
+        type: 'button',
+        style: hot ? { ...S.phRow, ...S.phRowHover } : S.phRow,
+        onMouseEnter: () => setHot(true),
+        onMouseLeave: () => setHot(false),
+        onFocus: () => setHot(true),
+        onBlur: () => setHot(false),
+        onClick: () => onPick(pkey),
+      },
+        h('code', { style: hot ? { ...S.phKey, ...S.phKeyHover } : S.phKey }, '{' + pkey + '}'),
+        h('span', { style: S.phDesc }, desc),
+        h('span', { style: hot ? { ...S.phHint, opacity: 1 } : S.phHint }, '点击插入'),
       )
     }
 
@@ -222,6 +257,9 @@ window.__ModuleLoader__.load({
 
       const inject = s.inject || {}
       const injecting = s.settings.enabled && s.settings.injectPerTurn
+      // 占位符的格式化在宿主完成，这里只做替换，规则与宿主一致：
+      // 未知占位符原样保留，已知占位符的值直接拼接。
+      const livePreview = renderPreview(tpl, inject.values)
       const statusText = s.error ? ('连接异常：' + s.error)
         : s.loading ? '正在读取…'
           : injecting ? '已开启：每轮自动注入'
@@ -257,20 +295,6 @@ window.__ModuleLoader__.load({
           }),
         }),
 
-        h('div', { style: S.panel },
-          h('div', { style: S.label }, '按当前设置会注入的句子'),
-          h(Line, {
-            text: inject.sampleLine,
-            placeholder: inject.hasSession ? '本会话还没有 provider 上报的用量，下一轮就会生成' : '本会话还没有工具调用记录，暂时无法生成',
-          }),
-          h('div', { style: S.label },
-            '最近一次实际注入',
-            inject.lastTurn !== null ? h('span', { style: { opacity: 0.8 } }, '（第 ' + inject.lastTurn + ' 回合）') : null,
-          ),
-          injecting
-            ? h(Line, { text: inject.lastLine, placeholder: '本回合还没到注入时机（注入发生在本轮第一次工具调用前）' })
-            : h('div', { style: S.empty }, '注入已关闭，这里不会有内容；Agent 仍可调用 context_usage 工具。'),
-        ),
 
         // 条件渲染：只有开启每轮注入时才需要编辑模板
         s.settings.injectPerTurn
@@ -309,18 +333,36 @@ window.__ModuleLoader__.load({
             ),
             h('div', { style: S.label }, '可用占位符（点击插入到光标处）'),
             h('div', { style: S.phList },
-              (s.placeholders || []).map((p) => h('button', {
+              (s.placeholders || []).map((p) => h(PhRow, {
                 key: p.key,
-                type: 'button',
-                style: S.phRow,
-                onClick: () => insertPlaceholder(p.key),
-              },
-                h('code', { style: S.phKey }, '{' + p.key + '}'),
-                h('span', { style: S.phDesc }, p.desc || ''),
-              )),
+                pkey: p.key,
+                desc: p.desc || '',
+                onPick: insertPlaceholder,
+              })),
             ),
             h('div', { style: S.hint },
               '未知的占位符会原样保留（便于发现拼错）；已知但暂时取不到值的会显示 ?。'),
+          )
+          : null,
+
+        // 实时预览放在模板下方：改一个字就能看到最终注入的内容
+        s.settings.injectPerTurn
+          ? h('div', { style: S.panel },
+            h('div', { style: S.label },
+              '实时预览',
+              h('span', { style: { opacity: 0.7 } }, tplDirty ? '（未保存，保存后才真正生效）' : '（与已保存模板一致）'),
+            ),
+            h(Line, {
+              text: livePreview || null,
+              placeholder: s.inject && s.inject.values
+                ? '模板为空，不会注入任何内容'
+                : (inject.hasSession ? '本会话还没有 provider 上报的用量，下一轮就会生成' : '本会话还没有工具调用记录，暂时无法生成'),
+            }),
+            h('div', { style: S.label },
+              '最近一次实际注入',
+              inject.lastTurn !== null ? h('span', { style: { opacity: 0.8 } }, '（第 ' + inject.lastTurn + ' 回合）') : null,
+            ),
+            h(Line, { text: inject.lastLine, placeholder: '本回合还没到注入时机（注入发生在本轮第一次工具调用前）' }),
           )
           : null,
 

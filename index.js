@@ -151,12 +151,13 @@ const kTok = (n) => {
 const PLACEHOLDER_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g
 
 /**
- * 把模板里的 {占位符} 换成实际值。
- * 未知占位符**原样保留**——这样用户在预览里一眼就能看到自己拼错了，而不是被悄悄吞掉。
- * 已知但暂无值的占位符显示 `?`。
+ * 把快照转成「占位符 → 已格式化的字符串」映射。
+ * 格式化（kTok / 百分比）只在宿主做一次：客户端拿到的就是可直接拼进文案的字符串，
+ * 这样设置页的实时预览不必在前端复刻一套格式化逻辑。
+ * 取不到值的占位符统一给 `?`。
  */
-function renderTemplate (template, snap) {
-  const values = {
+function placeholderValues (snap) {
+  const raw = {
     percent: snap.percent,
     used: kTok(snap.pressureTokens),
     usedRaw: snap.pressureTokens,
@@ -168,11 +169,22 @@ function renderTemplate (template, snap) {
     turn: snap.turn,
     compact: snap.percentToCompact,
   }
-  return template.replace(PLACEHOLDER_RE, (whole, key) => {
-    if (!Object.hasOwn(values, key)) return whole
-    const v = values[key]
-    return v === null || v === undefined ? '?' : String(v)
-  })
+  const out = {}
+  for (const [key, v] of Object.entries(raw)) {
+    out[key] = v === null || v === undefined ? '?' : String(v)
+  }
+  return out
+}
+
+/**
+ * 把模板里的 {占位符} 换成实际值。
+ * 未知占位符**原样保留**——这样用户在预览里一眼就能看到自己拼错了，而不是被悄悄吞掉。
+ */
+function renderTemplate (template, snap) {
+  const values = placeholderValues(snap)
+  return template.replace(PLACEHOLDER_RE, (whole, key) => (
+    Object.hasOwn(values, key) ? values[key] : whole
+  ))
 }
 
 /**
@@ -312,13 +324,17 @@ export function apply (ctx, config) {
    */
   const injectPayload = () => {
     const state = stateOf(lastSession)
+    const snap = snapshotOf(state)
+    const ready = snap.pressureTokens !== null
     return {
       active: settings.enabled && settings.injectPerTurn && Boolean(settings.template),
       hasSession: Boolean(lastSession),
       lastLine: lastInjectedText,
       lastTurn: injectedTurn,
-      /** 按当前设置与当前会话数据会生成的句子；还没有 provider 数据时为 null。 */
-      sampleLine: renderLine(state),
+      /** 按**已保存**的模板生成的句子；模板为空时没有句子可注入 */
+      sampleLine: ready && settings.template ? renderTemplate(settings.template, snap) : null,
+      /** 占位符 → 已格式化值；设置页据此对「编辑中的模板」做实时预览，不必等保存 */
+      values: ready ? placeholderValues(snap) : null,
     }
   }
 
