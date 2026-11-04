@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Context Self-Awareness",
+    "description": "Shows this session's context usage and provides the context_usage tool plus a per-turn readout."
+  }
+}

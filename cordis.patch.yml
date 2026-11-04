@@ -1,0 +1,11 @@
+# @local/dsh-context-usage-for-agent —— 宿主行
+# 配置项是启动默认值；用户在设置页改的值存在 ~/.dsh/dsh-context-usage.json，优先级高于此处。
+- insert:
+    - id: context-usage
+      name: '@local/dsh-context-usage-for-agent'
+      config:
+        enabled: true
+        # request/context 事件到达前用它兜底；到达后以 provider 上报值为准
+        contextWindow: 1000000
+        injectPerTurn: true
+        showCacheHit: true

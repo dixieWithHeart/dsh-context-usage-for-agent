@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "上下文自知",
+    "description": "显示本会话的上下文占用，并提供 context_usage 工具与每轮自动读数。"
+  }
+}
