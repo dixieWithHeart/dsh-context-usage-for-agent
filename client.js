@@ -121,6 +121,11 @@ window.__ModuleLoader__.load({
         position: 'absolute', top: '2px', left: on ? '18px' : '2px', width: '16px', height: '16px',
         borderRadius: '50%', background: '#fff', transition: 'left 160ms ease',
       }),
+      btn: (disabled) => ({
+        padding: '5px 12px', fontSize: '13px', borderRadius: C.radiusSm,
+        border: '1px solid ' + C.border, background: 'transparent', color: C.text,
+        cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+      }),
       msg: (bad) => ({ fontSize: '12px', color: bad ? 'var(--dsw-alias-danger, #e5534b)' : C.dim }),
       foot: { fontSize: '12px', color: C.dim, lineHeight: 1.6, margin: 0 },
     }
