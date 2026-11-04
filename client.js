@@ -54,7 +54,9 @@ window.__ModuleLoader__.load({
         const r = await fetch(API + '/state', { headers: { accept: 'application/json' } })
         if (!r.ok) throw new Error('HTTP ' + r.status)
         const j = await r.json()
-        state = { ...state, loading: false, error: null, version: j.version, settings: j.settings, inject: j.inject, placeholders: j.placeholders || [], defaultTemplate: j.defaultTemplate || '' }
+        // 载荷缺字段时保留上一份状态：宿主返回异常结构不能让整页崩成空白
+        // （tools\test-client-render.mjs 的「无响应」阶段会真的喂一个空载荷）
+        state = { ...state, loading: false, error: null, version: j.version, settings: j.settings || state.settings, inject: j.inject || state.inject, placeholders: j.placeholders || [], defaultTemplate: j.defaultTemplate || '' }
       } catch (e) {
         state = { ...state, loading: false, error: (e && e.message) || '无法连接宿主路由' }
       }
@@ -70,7 +72,7 @@ window.__ModuleLoader__.load({
       let j = null
       try { j = await r.json() } catch { /* 非 JSON 响应按失败处理 */ }
       if (!r.ok || !j || j.ok === false) throw new Error((j && j.error) || ('HTTP ' + r.status))
-      state = { ...state, settings: j.settings, inject: j.inject, error: null }
+      state = { ...state, settings: j.settings || state.settings, inject: j.inject || state.inject, error: null }
       emit()
       return j
     }
