@@ -118,19 +118,18 @@ window.__ModuleLoader__.load({
       hint: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
       headToggle: { display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '14px' },
       headToggleLabel: { fontSize: '12px', color: C.dim },
-      phList: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px 14px' },
+      phList: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '6px' },
       phRow: {
-        display: 'flex', gap: '10px', alignItems: 'baseline', padding: '5px 8px',
+        display: 'grid', gap: '2px', padding: '6px 9px', alignContent: 'start',
         border: 'none', background: 'transparent', color: C.text,
-        textAlign: 'left', cursor: 'pointer', borderRadius: '6px', width: '100%',
+        textAlign: 'left', cursor: 'pointer', borderRadius: '6px', width: '100%', boxSizing: 'border-box',
       },
       phKey: {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-        fontSize: '12px', color: C.accent, flex: 'none', minWidth: '116px',
+        fontSize: '12px', color: C.accent, lineHeight: 1.4,
       },
-      phDesc: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
+      phDesc: { fontSize: '11.5px', color: C.dim, lineHeight: 1.45 },
       phRowHover: { background: C.surface },
-      phHint: { marginLeft: 'auto', fontSize: '11px', color: C.dim, opacity: 0, transition: 'opacity 120ms ease', flex: 'none' },
       previewBox: { borderLeft: '2px solid ' + C.accent, paddingLeft: '10px', display: 'grid', gap: '6px', marginTop: '4px' },
       row: { display: 'flex', alignItems: 'flex-start', gap: '12px', paddingTop: '4px' },
       rowText: { display: 'grid', gap: '2px', flex: 1, minWidth: 0 },
@@ -187,7 +186,6 @@ window.__ModuleLoader__.load({
       },
         h('code', { style: S.phKey }, '{' + pkey + '}'),
         h('span', { style: S.phDesc }, desc),
-        h('span', { style: hot ? { ...S.phHint, opacity: 1 } : S.phHint }, '点击插入'),
       )
     }
 
