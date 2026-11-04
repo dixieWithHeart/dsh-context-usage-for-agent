@@ -17,10 +17,26 @@ window.__ModuleLoader__.load({
     const h = React.createElement
     const { useCallback, useEffect, useRef, useState } = React
 
+    // ═══ 1. 常量 ═══════════════════════════════════════════════════════
     const API = '/api/dsh-context-usage'
     const POLL_MS = 2000
     const LOG = '[dsh-context-usage-for-agent]'
+    const PLACEHOLDER_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g
 
+    // ═══ 2. 纯函数 ═════════════════════════════════════════════════════
+    /**
+     * 用宿主给的「已格式化占位符值」渲染模板。
+     * 格式化（k/v 单位、百分比）全在宿主做，前端只做字符串替换，避免两套口径漂移。
+     */
+    function renderPreview (template, values) {
+      if (!template) return ''
+      if (!values) return template
+      return template.replace(PLACEHOLDER_RE, (whole, key) => (
+        Object.hasOwn(values, key) ? values[key] : whole
+      ))
+    }
+
+    // ═══ 3. store：轮询与状态 ══════════════════════════════════════════
     let state = {
       loading: true,
       error: null,
@@ -69,7 +85,7 @@ window.__ModuleLoader__.load({
       return snap
     }
 
-    // ── 样式（只用主题 token，全部带 fallback）────────────────────────────
+    // ═══ 4. 样式（只用主题 token，全部带 fallback）══════════════════════
     const C = {
       border: 'var(--dsw-alias-border-subtle, rgba(130,130,140,0.28))',
       text: 'var(--dsw-alias-text-primary, inherit)',
@@ -78,20 +94,6 @@ window.__ModuleLoader__.load({
       surface: 'var(--dsw-alias-surface-raised, rgba(130,130,140,0.06))',
       radius: 'var(--dsw-radius-lg, 12px)',
       radiusSm: 'var(--dsw-radius-sm, 8px)',
-    }
-
-    const PLACEHOLDER_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g
-
-    /**
-     * 用宿主给的「已格式化占位符值」渲染模板。
-     * 格式化（k/v 单位、百分比）全在宿主做，前端只做字符串替换，避免两套口径漂移。
-     */
-    function renderPreview (template, values) {
-      if (!template) return ''
-      if (!values) return template
-      return template.replace(PLACEHOLDER_RE, (whole, key) => (
-        Object.hasOwn(values, key) ? values[key] : whole
-      ))
     }
 
     const S = {
@@ -153,6 +155,7 @@ window.__ModuleLoader__.load({
       foot: { fontSize: '12px', color: C.dim, lineHeight: 1.6, margin: 0 },
     }
 
+    // ═══ 5. 通用组件 ═══════════════════════════════════════════════════
     function Toggle ({ on, onChange, label }) {
       return h('button', {
         type: 'button',
@@ -195,7 +198,7 @@ window.__ModuleLoader__.load({
         : h('div', { style: S.empty }, placeholder)
     }
 
-    // ── slot: settings.section ───────────────────────────────────────────
+    // ═══ 6. 设置页（slot: settings.section）═════════════════════════════
     function SettingsCard () {
       const s = useStore()
       const [busy, setBusy] = useState(false)
@@ -369,7 +372,7 @@ window.__ModuleLoader__.load({
       )
     }
 
-    // ── registration ─────────────────────────────────────────────────────
+    // ═══ 7. 注册 ═══════════════════════════════════════════════════════
     function contribute (ctx, key, options, Component, what) {
       const fail = (e) => console.error(LOG, 'could not register ' + what + ':', e)
       try {

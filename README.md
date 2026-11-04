@@ -6,7 +6,29 @@
 2. **每轮自动一行读数** —— 本回合第一次工具调用前，往对话注入形如
    `[ctx 17.7%] 177k/1.00M · 缓存 99.4% · 余 823k` 的极短文本。
    运行中的 Agent 走 `steer`（下一步即可读到，不新开回合），空闲的走 `inject`（静默、不唤醒、不计费）。
-3. **设置页**（设置 → 上下文用量）—— 实时占用进度条 + 三个开关 + 兜底窗口大小。
+3. **设置页**（设置 → 上下文自知）—— 注入开关、可自定义模板、占位符面板与实时预览。
+
+## 目录结构
+
+宿主侧按职责拆分，依赖单向（index → 各模块 → constants），每个文件 40-90 行：
+
+```
+index.js              装配：把下面这些串起来（约 140 行）
+src/constants.js      常量与占位符表（配置契约的单一来源）
+src/settings.js       配置读取 / 校验 / 持久化
+src/template.js       数值格式化与模板渲染
+src/projection.js     会话投影单元
+src/state.js          状态读取层（纯函数，settings 显式传参）
+src/notice.js         往对话里塞通知
+src/tool.js           context_usage 工具定义
+src/routes.js         设置页 HTTP 路由
+client.js             浏览器半（含设置页 UI）
+```
+
+> **`client.js` 为何不拆**：浏览器端通过 `window.__ModuleLoader__.load({ factory })` 注册，
+> `factory` 里的 `require` 只能取到 `react` 这类白名单模块，不支持 import 项目内相对路径文件。
+> 因此该文件按「常量 / 纯函数 / store / 样式 / 组件 / 设置页 / 注册」七个分区组织，
+> 每区有 `═══ n. xxx ═══` 锚点注释，修改时按锚点定位，不要跨区大范围替换。
 
 ## 数据从哪来
 
