@@ -41,7 +41,25 @@ Host 行（`cordis.patch.yml`）里的 `config` 是启动默认值；用户在�
 | --- | --- | --- |
 | `enabled` | `true` | 总开关，关掉后不再自动注入读数（工具仍可调用） |
 | `injectPerTurn` | `true` | 每轮自动一行读数 |
-| `showCacheHit` | `true` | 读数里是否带缓存命中率 |
+| `template` | 见下 | **注入文案模板**，用 `{占位符}` 取数；留空表示不注入 |
+
+### 注入模板占位符
+
+| 占位符 | 含义 |
+| --- | --- |
+| `{percent}` | 上下文用量百分比，如 `17.7` |
+| `{used}` / `{usedRaw}` | 已用 token，带单位 / 原始数字 |
+| `{window}` / `{windowRaw}` | 上下文总长度，带单位 / 原始数字 |
+| `{remaining}` / `{remainingRaw}` | 剩余可用 token，带单位 / 原始数字 |
+| `{cache}` | 缓存命中率百分比 |
+| `{turn}` | 当前回合号 |
+| `{compact}` | 距自动压缩还有几个百分点（需配置 `compactAtRatio`） |
+
+默认模板：`[ctx {percent}%] {used}/{window} · 缓存 {cache}% · 余 {remaining}`
+
+- 未知占位符**原样保留**，方便在预览里发现拼错。
+- 已知但暂时取不到值的显示 `?`。
+- `showCacheHit` 已于 0.5.0 退役——要不要缓存率改由模板决定。
 | `contextWindow` | `1000000` | **仅兜底**，provider 上报后以真实值为准 |
 | `compactAtRatio` | `null` | 若确知 DSH 自动压缩阈值（0..1），工具会回报「距压缩还有几个百分点」 |
 

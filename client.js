@@ -25,8 +25,10 @@ window.__ModuleLoader__.load({
       loading: true,
       error: null,
       version: '',
-      settings: { enabled: true, injectPerTurn: true, showCacheHit: true, contextWindow: 1000000, compactAtRatio: null },
+      settings: { enabled: true, injectPerTurn: true, template: '', contextWindow: 1000000, compactAtRatio: null },
       inject: { active: true, hasSession: false, lastLine: null, lastTurn: null, sampleLine: null },
+      placeholders: [],
+      defaultTemplate: '',
     }
     const listeners = new Set()
     const emit = () => { for (const fn of listeners) fn(state) }
@@ -36,7 +38,7 @@ window.__ModuleLoader__.load({
         const r = await fetch(API + '/state', { headers: { accept: 'application/json' } })
         if (!r.ok) throw new Error('HTTP ' + r.status)
         const j = await r.json()
-        state = { ...state, loading: false, error: null, version: j.version, settings: j.settings, inject: j.inject }
+        state = { ...state, loading: false, error: null, version: j.version, settings: j.settings, inject: j.inject, placeholders: j.placeholders || [], defaultTemplate: j.defaultTemplate || '' }
       } catch (e) {
         state = { ...state, loading: false, error: (e && e.message) || '无法连接宿主路由' }
       }
@@ -93,6 +95,19 @@ window.__ModuleLoader__.load({
         background: 'rgba(130,130,140,0.12)', borderRadius: '6px', padding: '8px 10px', color: C.text,
       },
       empty: { fontSize: '12.5px', color: C.dim, fontStyle: 'italic' },
+      textarea: {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '12.5px', lineHeight: 1.6, padding: '8px 10px', resize: 'vertical',
+        border: '1px solid ' + C.border, borderRadius: '6px', background: 'transparent', color: C.text,
+        minHeight: '56px', width: '100%', boxSizing: 'border-box',
+      },
+      chips: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+      chip: {
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '12px', padding: '2px 8px', borderRadius: '999px',
+        border: '1px solid ' + C.border, background: 'transparent', color: C.dim, cursor: 'pointer',
+      },
+      hint: { fontSize: '12px', color: C.dim, lineHeight: 1.5 },
       row: { display: 'flex', alignItems: 'flex-start', gap: '12px', paddingTop: '4px' },
       rowText: { display: 'grid', gap: '2px', flex: 1, minWidth: 0 },
       rowTitle: { fontSize: '13px', fontWeight: 550 },
@@ -141,6 +156,18 @@ window.__ModuleLoader__.load({
       const s = useStore()
       const [busy, setBusy] = useState(false)
       const [msg, setMsg] = useState(null)
+      const [tpl, setTpl] = useState(s.settings.template ?? '')
+      const [tplDirty, setTplDirty] = useState(false)
+      const serverTpl = useRef(s.settings.template ?? '')
+
+      // 轮询不能覆盖用户正在编辑的模板
+      useEffect(() => {
+        const next = s.settings.template ?? ''
+        if (next !== serverTpl.current) {
+          serverTpl.current = next
+          if (!tplDirty) setTpl(next)
+        }
+      }, [s.settings.template, tplDirty])
 
       const flash = (text, bad) => {
         setMsg({ text, bad })
@@ -193,7 +220,7 @@ window.__ModuleLoader__.load({
 
         h(Row, {
           title: '每轮把上下文注入到对话中',
-          desc: '开启：每个回合的第一次工具调用前，主动把上面那行读数塞进当前回合。'
+          desc: '开启：每个回合的第一次工具调用前，主动把按模板生成的文案塞进当前回合。'
             + '关闭：完全不注入，只保留 Agent 主动调用 context_usage 的能力。',
           control: h(Toggle, {
             on: s.settings.injectPerTurn,
@@ -201,15 +228,56 @@ window.__ModuleLoader__.load({
             onChange: (v) => apply({ injectPerTurn: v }, v ? '已开启每轮注入' : '已关闭每轮注入，仅保留工具查询'),
           }),
         }),
-        h(Row, {
-          title: '注入的句子带缓存命中率',
-          desc: '只影响注入文案里是否出现「缓存 xx%」，不改变 pressureTokens 的口径。',
-          control: h(Toggle, {
-            on: s.settings.showCacheHit,
-            label: '注入的句子带缓存命中率',
-            onChange: (v) => apply({ showCacheHit: v }),
-          }),
-        }),
+
+        // 条件渲染：只有开启每轮注入时才需要编辑模板
+        s.settings.injectPerTurn
+          ? h('div', { style: S.panel },
+            h('div', { style: S.label }, '注入模板　用 {占位符} 取数，留空表示不注入'),
+            h('textarea', {
+              style: S.textarea,
+              rows: 3,
+              spellCheck: false,
+              value: tpl,
+              'aria-label': '注入模板',
+              onChange: (e) => { setTpl(e.target.value); setTplDirty(true) },
+            }),
+            h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
+              h('button', {
+                type: 'button',
+                style: S.btn(busy || !tplDirty),
+                disabled: busy || !tplDirty,
+                onClick: async () => {
+                  await apply({ template: tpl }, tpl.trim() ? '模板已保存' : '模板已清空：将不再注入')
+                  setTplDirty(false)
+                },
+              }, '保存模板'),
+              h('button', {
+                type: 'button',
+                style: S.btn(busy),
+                disabled: busy,
+                onClick: async () => {
+                  if (!s.defaultTemplate) return
+                  setTpl(s.defaultTemplate)
+                  setTplDirty(true)
+                },
+              }, '恢复默认'),
+              tplDirty ? h('span', { style: { fontSize: '12px', color: C.dim } }, '未保存') : null,
+            ),
+            h('div', { style: S.label }, '可用占位符（点击插入到末尾）'),
+            h('div', { style: S.chips },
+              (s.placeholders || []).map((p) => h('button', {
+                key: p.key,
+                type: 'button',
+                title: p.desc,
+                style: S.chip,
+                onClick: () => { setTpl((prev) => prev + '{' + p.key + '}'); setTplDirty(true) },
+              }, '{' + p.key + '}')),
+            ),
+            h('div', { style: S.hint },
+              '未知的占位符会原样保留（便于发现拼错）；已知但暂时取不到值的会显示 ?。'),
+          )
+          : null,
+
         h(Row, {
           title: '启用插件',
           desc: '总开关。关闭后既不注入，也不注册 context_usage 之外的行为（工具本身仍在，仅返回值可能为空）。',

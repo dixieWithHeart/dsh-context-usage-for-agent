@@ -8,4 +8,5 @@
         # request/context 事件到达前用它兜底；到达后以 provider 上报值为准
         contextWindow: 1000000
         injectPerTurn: true
-        showCacheHit: true
+        # 注入模板：用 {占位符} 取数，留空表示不注入。可用占位符见 README。
+        template: '[ctx {percent}%] {used}/{window} · 缓存 {cache}% · 余 {remaining}'

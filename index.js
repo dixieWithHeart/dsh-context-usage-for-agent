@@ -23,19 +23,40 @@ export const name = 'context-usage-for-agent'
 /** 依赖的服务：工具注册表 + 会话投影注册表。 */
 export const inject = ['tools', 'sessionProjections']
 
-const VERSION = '0.4.0'
+const VERSION = '0.5.0'
 const PROJECTION_KEY = 'contextUsage'
 const SETTINGS_FILENAME = 'dsh-context-usage.json'
+
+/** 默认注入模板，与 0.4.0 的固定文案保持等价。 */
+const DEFAULT_TEMPLATE = '[ctx {percent}%] {used}/{window} · 缓存 {cache}% · 余 {remaining}'
 
 const DEFAULTS = {
   enabled: true,
   /** model 上下文窗口的兜底值；request/context 到达后以 provider 上报为准。 */
   contextWindow: 1000000,
   injectPerTurn: true,
-  showCacheHit: true,
+  /** 注入文案模板，用 {占位符} 取数。空串表示不注入。 */
+  template: DEFAULT_TEMPLATE,
   /** 若确知 DSH 自动压缩阈值（0..1），设置页可填；null 表示不显示。 */
   compactAtRatio: null,
 }
+
+/** 模板长度上限：防手滑贴进一整段文档。 */
+const MAX_TEMPLATE_LENGTH = 500
+
+/** 模板里可用的全部占位符，供设置页展示与校验。 */
+const PLACEHOLDERS = [
+  ['percent', '上下文用量百分比，如 17.7'],
+  ['used', '已用 token，带单位，如 177k'],
+  ['usedRaw', '已用 token 的原始数字，如 177164'],
+  ['window', '上下文总长度，带单位，如 1.00M'],
+  ['windowRaw', '上下文总长度的原始数字'],
+  ['remaining', '剩余可用 token，带单位'],
+  ['remainingRaw', '剩余可用 token 的原始数字'],
+  ['cache', '缓存命中率百分比，如 99.4'],
+  ['turn', '当前回合号'],
+  ['compact', '距自动压缩还有几个百分点（需配置 compactAtRatio，未配置时为 ?）'],
+]
 
 // ── 设置文件 ────────────────────────────────────────────────────────────────
 // Host 行给的 config 是启动默认值；用户在设置页改的值落在这个文件里，优先级更高。
@@ -50,7 +71,11 @@ function sanitize (raw, base) {
   if (!raw || typeof raw !== 'object') return o
   if (typeof raw.enabled === 'boolean') o.enabled = raw.enabled
   if (typeof raw.injectPerTurn === 'boolean') o.injectPerTurn = raw.injectPerTurn
-  if (typeof raw.showCacheHit === 'boolean') o.showCacheHit = raw.showCacheHit
+  if (typeof raw.template === 'string') {
+    const t = raw.template.slice(0, MAX_TEMPLATE_LENGTH)
+    // 允许空串：等于「不注入」。是否真的注入由 injectPerTurn 与模板空值共同决定。
+    o.template = t
+  }
   if (typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow) && raw.contextWindow > 0) {
     o.contextWindow = raw.contextWindow
   }
@@ -121,6 +146,33 @@ const kTok = (n) => {
   if (n >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 2) + 'M'
   if (n >= 1000) return (n / 1000).toFixed(n >= 100000 ? 0 : 1) + 'k'
   return String(Math.round(n))
+}
+
+const PLACEHOLDER_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g
+
+/**
+ * 把模板里的 {占位符} 换成实际值。
+ * 未知占位符**原样保留**——这样用户在预览里一眼就能看到自己拼错了，而不是被悄悄吞掉。
+ * 已知但暂无值的占位符显示 `?`。
+ */
+function renderTemplate (template, snap) {
+  const values = {
+    percent: snap.percent,
+    used: kTok(snap.pressureTokens),
+    usedRaw: snap.pressureTokens,
+    window: kTok(snap.contextWindow),
+    windowRaw: snap.contextWindow,
+    remaining: kTok(snap.remainingTokens),
+    remainingRaw: snap.remainingTokens,
+    cache: snap.cacheHitPercent,
+    turn: snap.turn,
+    compact: snap.percentToCompact,
+  }
+  return template.replace(PLACEHOLDER_RE, (whole, key) => {
+    if (!Object.hasOwn(values, key)) return whole
+    const v = values[key]
+    return v === null || v === undefined ? '?' : String(v)
+  })
 }
 
 /**
@@ -223,6 +275,9 @@ export function apply (ctx, config) {
     const cacheHit = u && cacheDenom > 0
       ? Math.round((u.cacheReadTokens || 0) / cacheDenom * 1000) / 10
       : null
+    const percentToCompact = settings.compactAtRatio !== null && typeof pct === 'number'
+      ? Math.round((settings.compactAtRatio * 100 - pct) * 10) / 10
+      : null
     return {
       pressureTokens: state.pressureTokens,
       contextWindow: state.contextWindow,
@@ -232,20 +287,22 @@ export function apply (ctx, config) {
         ? state.contextWindow - state.pressureTokens
         : null,
       compactAtRatio: settings.compactAtRatio,
+      percentToCompact,
       lastUsage: state.lastUsage,
       cacheHitPercent: cacheHit,
       turn: state.turn || null,
     }
   }
 
-  /** 一行极短读数，供自动注入使用。 */
-  const shortLine = (state) => {
+  /**
+   * 按用户模板生成注入文案；模板为空或还没有 usage 时返回 null（不注入）。
+   * 缓存命中率不再单独开关——要不要写进文案由模板决定。
+   */
+  const renderLine = (state) => {
+    if (!settings.template) return null
     const snap = snapshotOf(state)
-    if (snap.percent === null) return null
-    let s = `[ctx ${snap.percent}%] ${kTok(snap.pressureTokens)}/${kTok(snap.contextWindow)}`
-    if (settings.showCacheHit && snap.cacheHitPercent !== null) s += ` · 缓存 ${snap.cacheHitPercent}%`
-    if (snap.remainingTokens !== null) s += ` · 余 ${kTok(snap.remainingTokens)}`
-    return s
+    if (snap.pressureTokens === null) return null
+    return renderTemplate(settings.template, snap)
   }
 
   /**
@@ -256,12 +313,12 @@ export function apply (ctx, config) {
   const injectPayload = () => {
     const state = stateOf(lastSession)
     return {
-      active: settings.enabled && settings.injectPerTurn,
+      active: settings.enabled && settings.injectPerTurn && Boolean(settings.template),
       hasSession: Boolean(lastSession),
       lastLine: lastInjectedText,
       lastTurn: injectedTurn,
       /** 按当前设置与当前会话数据会生成的句子；还没有 provider 数据时为 null。 */
-      sampleLine: shortLine(state),
+      sampleLine: renderLine(state),
     }
   }
 
@@ -280,7 +337,7 @@ export function apply (ctx, config) {
         const state = stateOf(agent.session)
         const turn = state.turn
         if (turn !== null && turn !== injectedTurn) {
-          const text = shortLine(state)
+          const text = renderLine(state)
           if (text) {
             injectedTurn = turn
             lastInjectedText = text
@@ -323,10 +380,13 @@ export function apply (ctx, config) {
               settings: {
                 enabled: settings.enabled,
                 injectPerTurn: settings.injectPerTurn,
-                showCacheHit: settings.showCacheHit,
+                template: settings.template,
                 contextWindow: settings.contextWindow,
                 compactAtRatio: settings.compactAtRatio,
               },
+              /** 供设置页渲染占位符说明，避免前后端各写一份。 */
+              placeholders: PLACEHOLDERS.map(([key, desc]) => ({ key, desc })),
+              defaultTemplate: DEFAULT_TEMPLATE,
               inject: injectPayload(),
             }))
           },
