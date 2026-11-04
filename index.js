@@ -302,7 +302,10 @@ export function apply (ctx, config) {
   }
 
   // ── HTTP 路由（设置页读写）──────────────────────────────────────────────
-  ctx.inject(['webServer'], (wctx) => {
+  // 宿主没提供 ctx.inject 时不能让整个插件崩掉：那样工具和每轮读数都会一起失效。
+  if (typeof ctx.inject !== 'function') {
+    log.warn('webServer 不可用：设置页路由未注册')
+  } else ctx.inject(['webServer'], (wctx) => {
     wctx.effect(() => {
       const routes = [
         {
