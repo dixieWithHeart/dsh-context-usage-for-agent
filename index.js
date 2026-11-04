@@ -201,7 +201,10 @@ export function apply (ctx, config) {
     if (!projections || !session) return initialState()
     try {
       const s = projections.stateOf(session, PROJECTION_KEY)
-      return s || initialState()
+      if (!s) return initialState()
+      // 兜底窗口以当前设置为准：投影单元只在 init 时读过一次，设置页改完值不会重建 cell，
+      // 不回填会导致「改了窗口但注入文案还显示旧窗口」。
+      return s.windowSource === 'config' ? { ...s, contextWindow: settings.contextWindow } : s
     } catch (e) {
       log.warn(`projection read failed: ${e && e.message ? e.message : e}`)
       return initialState()
