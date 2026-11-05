@@ -42,5 +42,13 @@
   ],
   "engines": {
     "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dixieWithHeart/dsh-context-usage-for-agent.git"
+  },
+  "homepage": "https://github.com/dixieWithHeart/dsh-context-usage-for-agent",
+  "bugs": {
+    "url": "https://github.com/dixieWithHeart/dsh-context-usage-for-agent/issues"
   }
 }
