@@ -23,6 +23,103 @@ window.__ModuleLoader__.load({
     const LOG = '[dsh-context-usage-for-agent]'
     const PLACEHOLDER_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g
 
+    // 界面文案：走宿主 locale 服务（ctx.locale），随界面语言切换即时更新。
+    // locale/*.json 只放插件清单的 meta，不承载界面文案——界面字典必须内联在 client 里。
+    const NS = 'contextUsage'
+    const DICTS = {
+      zh: {
+        nav: '上下文自知',
+        title: '上下文自知',
+        'status.error': '连接异常：{error}',
+        'status.reading': '正在读取…',
+        'status.on': '已开启：每轮自动注入',
+        'status.off': '已关闭：仅 Agent 主动查询',
+        enabled: '已启用',
+        disabled: '已停用',
+        togglePlugin: '启用插件',
+        desc1: '让 Agent 能读到自己的上下文占用：既可以通过 context_usage 工具主动查询，',
+        desc2: '也可以在每轮开头自动注入一行读数。你在聊天框下方的占用条由宿主显示，与本插件无关。',
+        rowTitle: '每轮把上下文注入到对话中',
+        rowDesc1: '开启：每个回合的第一次工具调用前，主动把按模板生成的文案塞进当前回合。',
+        rowDesc2: '关闭：完全不注入，只保留 Agent 主动调用 context_usage 的能力。',
+        injectOn: '已开启每轮注入',
+        injectOff: '已关闭每轮注入，仅保留工具查询',
+        templateLabel: '注入模板　用 {占位符} 取数，留空表示不注入',
+        templateAria: '注入模板',
+        templateSaved: '模板已保存',
+        templateCleared: '模板已清空：将不再注入',
+        saveTemplate: '保存模板',
+        restoreDefault: '恢复默认',
+        unsaved: '未保存',
+        preview: '实时预览',
+        previewUnsaved: '未保存，保存后生效',
+        previewSynced: '与已保存模板一致',
+        emptyTemplate: '模板为空，不会注入任何内容',
+        noUsage: '本会话还没有 provider 上报的用量，下一轮就会生成',
+        noTools: '本会话还没有工具调用记录，暂时无法生成',
+        lastInject: '最近一次实际注入',
+        turnN: '（第 {turn} 回合）',
+        notYet: '本回合还没到注入时机（注入发生在本轮第一次工具调用前）',
+        placeholders: '可用占位符（点击插入到光标处）',
+        phHint: '未知的占位符会原样保留（便于发现拼错）；已知但暂时取不到值的会显示 ?。',
+        foot1: 'pressureTokens = 未缓存输入 + 缓存读 + 缓存写（不含输出），与 DSH 内部 contextPressure 口径一致。',
+        foot2: '数据来自会话投影，重启后不必等新事件即可读到。设置保存在 ~/.dsh/dsh-context-usage.json。',
+        saveFailed: '保存失败：{error}',
+        stillRunning: '请确认 DSH 仍在运行',
+        'err.host': '无法连接宿主路由'
+      },
+      en: {
+        nav: 'Context Self-Awareness',
+        title: 'Context Self-Awareness',
+        'status.error': 'Connection error: {error}',
+        'status.reading': 'Reading…',
+        'status.on': 'On: injects every turn',
+        'status.off': 'Off: agent-only queries',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        togglePlugin: 'Enable plugin',
+        desc1: 'Lets the agent read its own context usage: it can call the context_usage tool on demand,',
+        desc2: ' and this plugin can inject one reading line at the start of every turn. The usage bar under the composer belongs to the host, not to this plugin.',
+        rowTitle: 'Inject context into the conversation every turn',
+        rowDesc1: 'On: before the first tool call of each turn, the rendered template is injected into that turn.',
+        rowDesc2: 'Off: nothing is injected; the agent can still call context_usage itself.',
+        injectOn: 'Per-turn injection on',
+        injectOff: 'Per-turn injection off; tool queries only',
+        templateLabel: 'Injection template　use {placeholder} tokens; leave empty to inject nothing',
+        templateAria: 'Injection template',
+        templateSaved: 'Template saved',
+        templateCleared: 'Template cleared: nothing will be injected',
+        saveTemplate: 'Save template',
+        restoreDefault: 'Restore default',
+        unsaved: 'Unsaved',
+        preview: 'Live preview',
+        previewUnsaved: 'Unsaved; takes effect after saving',
+        previewSynced: 'Matches the saved template',
+        emptyTemplate: 'Template is empty; nothing will be injected',
+        noUsage: 'The provider has not reported usage this session yet; it appears next turn',
+        noTools: 'No tool calls yet this session, so nothing can be generated',
+        lastInject: 'Last actual injection',
+        turnN: '(turn {turn})',
+        notYet: 'Not injected yet this turn (injection happens before the first tool call)',
+        placeholders: 'Available placeholders (click to insert at the cursor)',
+        phHint: 'Unknown placeholders stay as-is so typos are visible; known ones without a value show ?.',
+        foot1: 'pressureTokens = uncached input + cache read + cache write (outputs excluded), matching DSH internal contextPressure.',
+        foot2: 'Data comes from the session projection, so a restart does not need new events. Settings live in ~/.dsh/dsh-context-usage.json.',
+        saveFailed: 'Save failed: {error}',
+        stillRunning: 'Make sure DSH is still running',
+        'err.host': 'Cannot reach the host route'
+      }
+    }
+
+    /** 占位符替换，语义与宿主 locale 的 translate 一致（`{name}` → params.name）。 */
+    function fill (template, params) {
+      if (!params) return template
+      return template.replace(/\{(\w+)\}/g, (m, name) => (name in params ? String(params[name]) : m))
+    }
+
+    // apply 前只有兜底值（内置中文）；宿主 locale 可用时替换为 bind(NS)。
+    let t = (key, params) => fill(DICTS.zh[key] === undefined ? key : DICTS.zh[key], params)
+
     // ═══ 2. 纯函数 ═════════════════════════════════════════════════════
     /**
      * 用宿主给的「已格式化占位符值」渲染模板。
@@ -58,7 +155,7 @@ window.__ModuleLoader__.load({
         // （tools\test-client-render.mjs 的「无响应」阶段会真的喂一个空载荷）
         state = { ...state, loading: false, error: null, version: j.version, settings: j.settings || state.settings, inject: j.inject || state.inject, placeholders: j.placeholders || [], defaultTemplate: j.defaultTemplate || '' }
       } catch (e) {
-        state = { ...state, loading: false, error: (e && e.message) || '无法连接宿主路由' }
+        state = { ...state, loading: false, error: (e && e.message) || t('err.host') }
       }
       emit()
     }
@@ -231,7 +328,7 @@ window.__ModuleLoader__.load({
           await save(patch)
           if (okText) flash(okText, false)
         } catch (e) {
-          flash('保存失败：' + ((e && e.message) || '请确认 DSH 仍在运行'), true)
+          flash(t('saveFailed', { error: (e && e.message) || t('stillRunning') }), true)
         } finally {
           setBusy(false)
         }
@@ -262,38 +359,35 @@ window.__ModuleLoader__.load({
       // 占位符的格式化在宿主完成，这里只做替换，规则与宿主一致：
       // 未知占位符原样保留，已知占位符的值直接拼接。
       const livePreview = renderPreview(tpl, inject.values)
-      const statusText = s.error ? ('连接异常：' + s.error)
-        : s.loading ? '正在读取…'
-          : injecting ? '已开启：每轮自动注入'
-            : '已关闭：仅 Agent 主动查询'
+      const statusText = s.error ? t('status.error', { error: s.error })
+        : s.loading ? t('status.reading')
+          : injecting ? t('status.on')
+            : t('status.off')
 
       return h('div', { style: S.card },
         h('div', { style: S.head },
-          h('h3', { style: S.title }, '上下文自知'),
+          h('h3', { style: S.title }, t('title')),
           s.version ? h('span', { style: S.badge }, 'v' + s.version) : null,
           h('span', { style: S.status }, statusText),
           // 总开关在头部，一眼可见、一步可达
           h('div', { style: S.headToggle },
-            h('span', { style: S.headToggleLabel }, s.settings.enabled ? '已启用' : '已停用'),
+            h('span', { style: S.headToggleLabel }, s.settings.enabled ? t('enabled') : t('disabled')),
             h(Toggle, {
               on: s.settings.enabled,
-              label: '启用插件',
-              onChange: (v) => apply({ enabled: v }, v ? '已启用' : '已停用'),
+              label: t('togglePlugin'),
+              onChange: (v) => apply({ enabled: v }, v ? t('enabled') : t('disabled')),
             }),
           ),
         ),
-        h('p', { style: S.desc },
-          '让 Agent 能读到自己的上下文占用：既可以通过 context_usage 工具主动查询，'
-          + '也可以在每轮开头自动注入一行读数。你在聊天框下方的占用条由宿主显示，与本插件无关。'),
+        h('p', { style: S.desc }, t('desc1') + t('desc2')),
 
         h(Row, {
-          title: '每轮把上下文注入到对话中',
-          desc: '开启：每个回合的第一次工具调用前，主动把按模板生成的文案塞进当前回合。'
-            + '关闭：完全不注入，只保留 Agent 主动调用 context_usage 的能力。',
+          title: t('rowTitle'),
+          desc: t('rowDesc1') + t('rowDesc2'),
           control: h(Toggle, {
             on: s.settings.injectPerTurn,
-            label: '每轮把上下文注入到对话中',
-            onChange: (v) => apply({ injectPerTurn: v }, v ? '已开启每轮注入' : '已关闭每轮注入，仅保留工具查询'),
+            label: t('rowTitle'),
+            onChange: (v) => apply({ injectPerTurn: v }, v ? t('injectOn') : t('injectOff')),
           }),
         }),
 
@@ -301,14 +395,14 @@ window.__ModuleLoader__.load({
         // 条件渲染：只有开启每轮注入时才需要编辑模板
         s.settings.injectPerTurn
           ? h('div', { style: S.panel },
-            h('div', { style: S.label }, '注入模板　用 {占位符} 取数，留空表示不注入'),
+            h('div', { style: S.label }, t('templateLabel')),
             h('textarea', {
               ref: tplRef,
               style: S.textarea,
               rows: 3,
               spellCheck: false,
               value: tpl,
-              'aria-label': '注入模板',
+              'aria-label': t('templateAria'),
               onChange: (e) => { setTpl(e.target.value); setTplDirty(true) },
             }),
             h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
@@ -317,10 +411,10 @@ window.__ModuleLoader__.load({
                 style: S.btn(busy || !tplDirty),
                 disabled: busy || !tplDirty,
                 onClick: async () => {
-                  await apply({ template: tpl }, tpl.trim() ? '模板已保存' : '模板已清空：将不再注入')
+                  await apply({ template: tpl }, tpl.trim() ? t('templateSaved') : t('templateCleared'))
                   setTplDirty(false)
                 },
-              }, '保存模板'),
+              }, t('saveTemplate')),
               h('button', {
                 type: 'button',
                 style: S.btn(busy),
@@ -330,30 +424,30 @@ window.__ModuleLoader__.load({
                   setTpl(s.defaultTemplate)
                   setTplDirty(true)
                 },
-              }, '恢复默认'),
-              tplDirty ? h('span', { style: { fontSize: '12px', color: C.dim } }, '未保存') : null,
+              }, t('restoreDefault')),
+              tplDirty ? h('span', { style: { fontSize: '12px', color: C.dim } }, t('unsaved')) : null,
             ),
 
             // 实时预览紧贴模板，中间不隔其他内容
             h('div', { style: S.previewBox },
               h('div', { style: S.label },
-                '实时预览',
-                h('span', { style: { opacity: 0.7 } }, tplDirty ? '未保存，保存后生效' : '与已保存模板一致'),
+                t('preview'),
+                h('span', { style: { opacity: 0.7 } }, tplDirty ? t('previewUnsaved') : t('previewSynced')),
               ),
               h(Line, {
                 text: livePreview || null,
                 placeholder: inject.values
-                  ? '模板为空，不会注入任何内容'
-                  : (inject.hasSession ? '本会话还没有 provider 上报的用量，下一轮就会生成' : '本会话还没有工具调用记录，暂时无法生成'),
+                  ? t('emptyTemplate')
+                  : (inject.hasSession ? t('noUsage') : t('noTools')),
               }),
               h('div', { style: S.label },
-                '最近一次实际注入',
-                inject.lastTurn !== null ? h('span', { style: { opacity: 0.8 } }, '（第 ' + inject.lastTurn + ' 回合）') : null,
+                t('lastInject'),
+                inject.lastTurn !== null ? h('span', { style: { opacity: 0.8 } }, t('turnN', { turn: inject.lastTurn })) : null,
               ),
-              h(Line, { text: inject.lastLine, placeholder: '本回合还没到注入时机（注入发生在本轮第一次工具调用前）' }),
+              h(Line, { text: inject.lastLine, placeholder: t('notYet') }),
             ),
 
-            h('div', { style: S.label }, '可用占位符（点击插入到光标处）'),
+            h('div', { style: S.label }, t('placeholders')),
             h('div', { style: S.phList },
               (s.placeholders || []).map((p) => h(PhRow, {
                 key: p.key,
@@ -362,15 +456,12 @@ window.__ModuleLoader__.load({
                 onPick: insertPlaceholder,
               })),
             ),
-            h('div', { style: S.hint },
-              '未知的占位符会原样保留（便于发现拼错）；已知但暂时取不到值的会显示 ?。'),
+            h('div', { style: S.hint }, t('phHint')),
           )
           : null,
 
         msg ? h('div', { style: S.msg(msg.bad) }, msg.text) : null,
-        h('p', { style: S.foot },
-          'pressureTokens = 未缓存输入 + 缓存读 + 缓存写（不含输出），与 DSH 内部 contextPressure 口径一致。'
-          + '数据来自会话投影，重启后不必等新事件即可读到。设置保存在 ~/.dsh/dsh-context-usage.json。'),
+        h('p', { style: S.foot }, t('foot1') + t('foot2')),
       )
     }
 
@@ -392,9 +483,18 @@ window.__ModuleLoader__.load({
       }
     }
 
-    const inject = ['slots']
+    const inject = ['slots', 'locale']
 
     function apply (ctx) {
+      // 界面文案接入宿主 locale：注册字典后 t 指向 bind(NS)，切换语言即时生效。
+      // 精简组合或测试替身可能没有 locale 服务——判存在后退回内置中文，不让整块 UI 崩掉。
+      if (ctx.locale && typeof ctx.locale.register === 'function' && typeof ctx.locale.bind === 'function') {
+        ctx.effect(() => ctx.locale.register(NS, DICTS), 'context-usage-dicts')
+        t = ctx.locale.bind(NS)
+      } else {
+        console.warn(LOG, 'locale 服务不可用：界面文案固定中文')
+      }
+
       ctx.effect(() => {
         refresh()
         const timer = setInterval(() => { if (!document.hidden) refresh() }, POLL_MS)
@@ -410,7 +510,7 @@ window.__ModuleLoader__.load({
         () => contribute(
           ctx,
           'settings.section',
-          { name: 'settings.section', id: 'context-usage', order: 215, label: '上下文自知' },
+          { name: 'settings.section', id: 'context-usage', order: 215, locale: NS, label: () => t('nav') },
           SettingsCard,
           'settings.section',
         ),
