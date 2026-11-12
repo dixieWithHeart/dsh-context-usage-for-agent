@@ -1,6 +1,6 @@
 {
   "name": "dsh-context-usage-for-agent",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "description": "显示 DSH 会话的上下文占用：context_usage 工具 + 每轮读数 + 设置页",
   "exports": {
