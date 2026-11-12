@@ -9,7 +9,7 @@
  *   · `stateSchema.parse` 会被用来校验检查点里恢复出来的状态
  */
 
-import { PROJECTION_KEY } from './constants.js'
+import { PROJECTION_KEY } from '../constants.js'
 
 /**
  * 状态 schema。

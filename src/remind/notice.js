@@ -4,7 +4,7 @@
  * `source.kind` 必须写全（v4 会话格式拒绝退化的 plugin kind），否则投递会静默失败。
  */
 
-import { NOTICE_SOURCE_KIND } from './constants.js'
+import { NOTICE_SOURCE_KIND } from '../constants.js'
 
 /**
  * 造一条能被 harness 当成 user 消息接收的对象。

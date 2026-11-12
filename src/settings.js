@@ -23,10 +23,22 @@ export function sanitize (raw, base) {
   const o = { ...base }
   if (!raw || typeof raw !== 'object') return o
   if (typeof raw.enabled === 'boolean') o.enabled = raw.enabled
-  if (typeof raw.injectPerTurn === 'boolean') o.injectPerTurn = raw.injectPerTurn
+  if (typeof raw.toolEnabled === 'boolean') o.toolEnabled = raw.toolEnabled
+  // 注入模式；兼容旧字段 injectPerTurn（true → 每轮，false → 关闭）
+  if (typeof raw.injectMode === 'string' && ['threshold', 'everyTurn', 'off'].includes(raw.injectMode)) {
+    o.injectMode = raw.injectMode
+  } else if (typeof raw.injectPerTurn === 'boolean') {
+    o.injectMode = raw.injectPerTurn ? 'everyTurn' : 'off'
+  }
+  if (typeof raw.threshold === 'number' && Number.isFinite(raw.threshold)) {
+    o.threshold = Math.min(100, Math.max(0, Math.round(raw.threshold)))
+  }
   if (typeof raw.template === 'string') {
-    // 允许空串：等于「不注入」。是否真的注入由 injectPerTurn 与模板空值共同决定。
+    // 允许空串：等于「不注入」。是否真的注入由 injectMode 与模板空值共同决定。
     o.template = raw.template.slice(0, MAX_TEMPLATE_LENGTH)
+  }
+  if (typeof raw.remindTemplate === 'string') {
+    o.remindTemplate = raw.remindTemplate.slice(0, MAX_TEMPLATE_LENGTH)
   }
   if (typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow) && raw.contextWindow > 0) {
     o.contextWindow = raw.contextWindow

@@ -4,7 +4,7 @@
  * 全部是纯函数，`settings` 显式传参而不是从闭包读——这样单独测试时不需要造插件上下文。
  */
 
-import { PROJECTION_KEY } from './constants.js'
+import { PROJECTION_KEY } from '../constants.js'
 import { renderTemplate } from './template.js'
 
 /** 投影缺失或还没有数据时的退化状态。 */

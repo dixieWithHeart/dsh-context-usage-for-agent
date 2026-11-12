@@ -5,8 +5,8 @@
  * 响应统一带 `cache-control: no-store`，避免轮询拿到陈旧设置。
  */
 
-import { VERSION, PLACEHOLDERS, DEFAULT_TEMPLATE, MAX_BODY_BYTES } from './constants.js'
-import { sanitize } from './settings.js'
+import { VERSION, PLACEHOLDERS, DEFAULT_TEMPLATE, MAX_BODY_BYTES } from '../constants.js'
+import { sanitize } from '../settings.js'
 
 const JSON_HEADERS = { 'content-type': 'application/json', 'cache-control': 'no-store' }
 
@@ -44,8 +44,11 @@ export function createRoutes ({ getSettings, setSettings, persist, injectPayload
           version: VERSION,
           settings: {
             enabled: settings.enabled,
-            injectPerTurn: settings.injectPerTurn,
+            injectMode: settings.injectMode,
+            threshold: settings.threshold,
+            toolEnabled: settings.toolEnabled === true,
             template: settings.template,
+            remindTemplate: settings.remindTemplate,
             contextWindow: settings.contextWindow,
             compactAtRatio: settings.compactAtRatio,
           },

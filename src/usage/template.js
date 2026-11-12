@@ -17,20 +17,16 @@ export const PLACEHOLDER_RE = /\{([A-Za-z][A-Za-z0-9]*)\}/g
 
 /**
  * 把快照转成「占位符 → 已格式化的字符串」映射。
- * 取不到值的占位符统一给 `?`，避免文案里出现 null/undefined。
+ *
+ * 2026-11-11 用户裁决：只保留三个占位符（percent / used / cache）。
+ * 未列出的占位符会被 `renderTemplate` 原样保留，便于用户发现模板里还在用旧字段。
+ * 取不到值的统一给 `?`，避免文案里出现 null/undefined。
  */
 export function placeholderValues (snap) {
   const raw = {
     percent: snap.percent,
     used: kTok(snap.pressureTokens),
-    usedRaw: snap.pressureTokens,
-    window: kTok(snap.contextWindow),
-    windowRaw: snap.contextWindow,
-    remaining: kTok(snap.remainingTokens),
-    remainingRaw: snap.remainingTokens,
     cache: snap.cacheHitPercent,
-    turn: snap.turn,
-    compact: snap.percentToCompact,
   }
   const out = {}
   for (const [key, v] of Object.entries(raw)) {

@@ -24,12 +24,14 @@
 
 import { VERSION, PROJECTION_KEY } from './src/constants.js'
 import { resolveOptions, loadSettings, saveSettings, settingsPath } from './src/settings.js'
-import { placeholderValues, renderTemplate } from './src/template.js'
-import { createProjection } from './src/projection.js'
-import { initialState, snapshotOf, readState, renderLine } from './src/state.js'
-import { deliverNotice } from './src/notice.js'
-import { createToolDefinition } from './src/tool.js'
-import { createRoutes } from './src/routes.js'
+import { placeholderValues, renderTemplate } from './src/usage/template.js'
+import { createProjection } from './src/usage/projection.js'
+import { initialState, snapshotOf, readState, renderLine } from './src/usage/state.js'
+import { deliverNotice } from './src/remind/notice.js'
+import { buildReminder } from './src/remind/reminder.js'
+import { initialGate, markSent } from './src/remind/threshold.js'
+import { createToolDefinition } from './src/surface/tool.js'
+import { createRoutes } from './src/surface/routes.js'
 
 /** Loader identity for this plugin entry. */
 export const name = 'context-usage-for-agent'
@@ -78,35 +80,67 @@ export function apply (ctx, config) {
   const injectPayload = () => {
     const snap = readSnapshot(lastSession)
     const ready = snap.pressureTokens !== null
+    const mode = settings.injectMode
+    const activeTemplate = mode === 'threshold' ? settings.remindTemplate : settings.template
     return {
-      active: settings.enabled && settings.injectPerTurn && Boolean(settings.template),
+      mode,
+      threshold: settings.threshold,
+      active: settings.enabled && mode !== 'off' && Boolean(activeTemplate),
       hasSession: Boolean(lastSession),
       lastLine: lastInjectedText,
       lastTurn: injectedTurn,
-      /** 按**已保存**的模板生成的句子；模板为空时没有句子可注入 */
+      /** everyTurn 模式用的读数句 */
       sampleLine: ready && settings.template ? renderTemplate(settings.template, snap) : null,
+      /** threshold 模式用的提醒句 */
+      remindSampleLine: ready && settings.remindTemplate ? renderTemplate(settings.remindTemplate, snap) : null,
       /** 占位符 → 已格式化值；设置页据此对「编辑中的模板」做实时预览，不必等保存 */
       values: ready ? placeholderValues(snap) : null,
     }
   }
 
-  // ── 每轮自动附加读数 ──────────────────────────────────────────────────
+  // ── 注入：两种模式共用同一挂点 ────────────────────────────────────────
+  //   threshold（默认）：用量首次到阈值提醒一次，之后不再打扰
+  //   everyTurn：每回合一行读数（旧行为）
+  const gates = new Map()
+  const gateKey = (session) => (session && session.id ? String(session.id) : session)
+
+  const send = (agent, text) => {
+    lastInjectedText = text
+    deliverNotice(agent, text, log).catch((e) => log.warn(`inject failed: ${e && e.message ? e.message : e}`))
+  }
+
   ctx.on('tools/pre-execute', (exec, next) => {
     try {
       const agent = exec && exec.agent
       if (agent && agent.session) lastSession = agent.session
       const isOwn = exec && exec.name === 'context_usage'
-      if (settings.enabled && settings.injectPerTurn && !isOwn && agent) {
-        const state = readState({ projections, log, session: agent.session, settings })
+      const mode = settings.injectMode
+      if (!settings.enabled || mode === 'off' || isOwn || !agent) return next()
+
+      const state = readState({ projections, log, session: agent.session, settings })
+
+      if (mode === 'everyTurn') {
         const turn = state.turn
         if (turn !== null && turn !== injectedTurn) {
           const text = renderLine(state, settings)
           if (text) {
             injectedTurn = turn
-            lastInjectedText = text
-            deliverNotice(agent, text, log).catch((e) => log.warn(`inject failed: ${e && e.message ? e.message : e}`))
+            send(agent, text)
           }
         }
+        return next()
+      }
+
+      // threshold 模式：每会话一次
+      const snap = snapshotOf(state, settings)
+      const key = gateKey(agent.session)
+      const gate = gates.get(key) || initialGate()
+      const reminder = buildReminder({ snap, gate, options: settings })
+      if (reminder) {
+        gates.set(key, markSent(gate, { level: reminder.level, percent: reminder.percent }))
+        injectedTurn = state.turn
+        send(agent, reminder.text)
+        log.info(`reminder sent at ${Math.round(reminder.percent)}%`)
       }
     } catch (e) {
       log.warn(`pre-execute hook failed: ${e && e.message ? e.message : e}`)
@@ -134,23 +168,29 @@ export function apply (ctx, config) {
     })
   }
 
-  // ── context_usage 工具 ────────────────────────────────────────────────
-  const definition = createToolDefinition({
-    readSnapshot,
-    onSession: (session) => { lastSession = session },
-    hasProjections: Boolean(projections),
-  })
+  // ── context_usage 工具（默认不暴露） ──────────────────────────────────
+  // 工具一进清单就是持续暗示，Agent 会反复查询并把读数当预算用；关闭时压根不注册，
+  // 模型侧完全看不到这个能力存在。
+  if (settings.toolEnabled === true) {
+    const definition = createToolDefinition({
+      readSnapshot,
+      onSession: (session) => { lastSession = session },
+      hasProjections: Boolean(projections),
+    })
 
-  ctx.effect(() => {
-    try {
-      const dispose = ctx.tools.register(definition)
-      log.info('context_usage tool registered')
-      return dispose
-    } catch (e) {
-      log.warn(`tool registration failed: ${e && e.message ? e.message : e}`)
-      return () => {}
-    }
-  })
+    ctx.effect(() => {
+      try {
+        const dispose = ctx.tools.register(definition)
+        log.info('context_usage tool registered')
+        return dispose
+      } catch (e) {
+        log.warn(`tool registration failed: ${e && e.message ? e.message : e}`)
+        return () => {}
+      }
+    })
+  } else {
+    log.info('context_usage tool not exposed (toolEnabled=false)')
+  }
 
   log.info(`ready v${VERSION} (projection ${PROJECTION_KEY}, settings=${settingsPath()})`)
 }
