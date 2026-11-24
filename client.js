@@ -211,7 +211,7 @@ window.__ModuleLoader__.load({
     }
 
     // ═══ 4. 样式（只用主题 token，全部带 fallback）══════════════════════
-    // @ui-kit v1.3.0  共享 UI 基座（源：plugins/_shared/ui-kit.js；改源后重新复制本段）
+    // @ui-kit v1.4.3  共享 UI 基座（源：plugins/_shared/ui-kit.js；改源后重新复制本段）
     // ═════════════════════════════ [C] 颜色 token ═════════════════════════
     const C = {
       border: 'var(--dsw-alias-border-subtle, rgba(130,130,140,0.28))',
@@ -300,6 +300,42 @@ window.__ModuleLoader__.load({
       sliderValue: { fontSize: '13px', fontWeight: 600, fontFamily: C.mono },
     }
 
+    // ═════════════════════════ [P] 页面骨架样式 ═════════════════════════
+    // 页面骨架（Page / Card / Section / Footer）用 P，不并入插件的 S。
+    // 插件无法通过覆盖 S 改变页面层级，六个插件的设置页因此保持同构。
+    const P = {
+      page: { display: 'grid', gap: '14px', color: C.text },
+      head: { display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' },
+      title: { fontSize: '16px', fontWeight: 600, margin: 0, lineHeight: 1.3 },
+      meta: { fontSize: '12px', color: C.dim },
+      headRight: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' },
+      badge: { fontSize: '12px', color: C.dim, border: '1px solid ' + C.border, borderRadius: '999px', padding: '1px 8px' },
+      card: {
+        border: '1px solid ' + C.border, borderRadius: C.radius, padding: '16px 18px',
+        display: 'grid', gap: '12px',
+      },
+      cardHead: { display: 'grid', gap: '3px' },
+      cardTitleRow: { display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap' },
+      cardTitle: { fontSize: '15px', fontWeight: 600, margin: 0 },
+      cardAction: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+      cardDesc: { margin: 0, fontSize: '12px', lineHeight: 1.6, color: C.dim },
+      section: { borderTop: '1px solid ' + C.border, paddingTop: '10px', display: 'grid', gap: '10px' },
+      sectionHead: {
+        display: 'flex', alignItems: 'baseline', gap: '8px', width: '100%',
+        background: 'transparent', border: 0, padding: 0, cursor: 'pointer',
+        color: C.text, textAlign: 'left',
+      },
+      sectionTitle: { fontSize: '13px', fontWeight: 600 },
+      sectionHint: { fontSize: '12px', color: C.dim, flex: '1 1 auto', minWidth: 0 },
+      sectionChevron: { fontSize: '12px', color: C.dim, flex: 'none' },
+      sectionBody: { display: 'grid', gap: '10px' },
+      footer: { fontSize: '12px', color: C.dim, lineHeight: 1.6, margin: 0 },
+      ok: { fontSize: '12px', color: C.ok },
+      bad: { fontSize: '12px', color: C.danger },
+      note: { fontSize: '12px', color: C.dim },
+      empty: { fontSize: '12.5px', color: C.dim, fontStyle: 'italic' },
+    }
+
     // ═════════════════════════ [组件] 通用控件 ═════════════════════════
     /** 开关按钮。 */
     function Toggle ({ on, label, onChange }) {
@@ -368,6 +404,78 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /** 设置页骨架：页头（标题 / 版本 / 自定义徽章 / 状态 / 开关）+ 可选说明 + 内容 + 脚注。 */
+    function Page ({ title, version, badge, status, toggle, desc, children, footer }) {
+      return h('div', { style: P.page },
+        h('div', { style: P.head },
+          h('h3', { style: P.title }, title),
+          version ? h('span', { style: P.badge }, 'v' + version) : null,
+          badge ? h('span', { style: P.badge }, badge) : null,
+          h('div', { style: P.headRight },
+            status ? h('span', { style: P.meta }, status) : null,
+            toggle || null,
+          ),
+        ),
+        desc ? h('p', { style: P.meta }, desc) : null,
+        children,
+        footer ? h('p', { style: P.footer }, footer) : null,
+      )
+    }
+
+    /** 内容卡片：标题 + 可选说明 + 标题行右侧操作 + 内容。 */
+    function Card ({ title, desc, status, action, children }) {
+      return h('section', { style: P.card },
+        (title || desc || status || action) ? h('div', { style: P.cardHead },
+          (title || status || action) ? h('div', { style: P.cardTitleRow },
+            title ? h('h4', { style: P.cardTitle }, title) : null,
+            status ? h('span', { style: P.meta }, status) : null,
+            action ? h('span', { style: P.cardAction }, action) : null,
+          ) : null,
+          desc ? h('p', { style: P.cardDesc }, desc) : null,
+        ) : null,
+        children,
+      )
+    }
+
+    /** 可折叠分组：标题行 + 折叠内容（收起时保留 DOM，只用 display 隐藏）。 */
+    function Section ({ title, hint, open, onToggle, children }) {
+      return h('section', { style: P.section },
+        h('button', {
+          type: 'button',
+          style: P.sectionHead,
+          'aria-expanded': open ? 'true' : 'false',
+          onClick: onToggle,
+        },
+          h('span', { style: P.sectionTitle }, title),
+          hint ? h('span', { style: P.sectionHint }, hint) : null,
+          h('span', { style: P.sectionChevron }, open ? '▾' : '▸'),
+        ),
+        h('div', { style: open ? P.sectionBody : { ...P.sectionBody, display: 'none' } }, children),
+      )
+    }
+
+    /** 纵向堆叠。 */
+    function Stack ({ gap, children }) {
+      return h('div', { style: { display: 'grid', gap: gap || '10px' } }, children)
+    }
+
+    /** 横向排列，空间不足时换行。 */
+    function Inline ({ gap, children }) {
+      return h('div', { style: { display: 'flex', alignItems: 'center', gap: gap || '8px', flexWrap: 'wrap' } }, children)
+    }
+
+    /** 保存状态行：saving / saved / error；text 为空时不渲染。 */
+    function StatusLine ({ state, text }) {
+      if (!text) return null
+      const style = state === 'error' ? P.bad : state === 'saved' ? P.ok : P.note
+      return h('div', { style, role: state === 'error' ? 'alert' : 'status' }, text)
+    }
+
+    /** 脚注：存储路径、数据来源等。 */
+    function Footer ({ children }) {
+      return h('p', { style: P.footer }, children)
+    }
+
     /** 互斥选项组（药丸按钮）。options 为 `[[value, label], ...]`。 */
     function ChipGroup ({ value, options, disabled, onChange }) {
       return h('div', { style: S.chips },
@@ -387,8 +495,7 @@ window.__ModuleLoader__.load({
     const S = {
       ...S_BASE,
       // 头部总开关
-      headToggle: { display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '14px' },
-      headToggleLabel: { fontSize: '12px', color: C.dim },
+      // 页面骨架与页头开关交给基座
       // 占位符列表
       phList: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: '6px' },
       phRow: {
@@ -482,6 +589,21 @@ window.__ModuleLoader__.load({
     }
 
     // ═══ 6. 设置页（slot: settings.section）═════════════════════════════
+    /** 设置页导航图标：柱状占用（跟随主题色）。 */
+    function SettingsIcon ({ size }) {
+      const px = Number(size) || 18
+      return h('svg', {
+        width: px, height: px, viewBox: '0 0 24 24', fill: 'none',
+        stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round',
+        'aria-hidden': 'true',
+      },
+        h('rect', { x: 3, y: 4, width: 18, height: 16, rx: 2.5 }),
+        h('path', { d: 'M7.5 15.5V11' }),
+        h('path', { d: 'M12 15.5V8.5' }),
+        h('path', { d: 'M16.5 15.5V13' }),
+      )
+    }
+
     function SettingsCard () {
       const s = useStore()
       const [busy, setBusy] = useState(false)
@@ -550,22 +672,23 @@ window.__ModuleLoader__.load({
           : injecting ? t('status.on')
             : t('status.off')
 
-      return h('div', { style: S.card },
-        h('div', { style: S.head },
-          h('h3', { style: S.title }, t('title')),
-          s.version ? h('span', { style: S.badge }, 'v' + s.version) : null,
-          h('span', { style: S.status }, statusText),
-          // 总开关在头部，一眼可见、一步可达
-          h('div', { style: S.headToggle },
-            h('span', { style: S.headToggleLabel }, s.settings.enabled ? t('enabled') : t('disabled')),
-            h(Toggle, {
-              on: s.settings.enabled,
-              label: t('togglePlugin'),
-              onChange: (v) => apply({ enabled: v }, v ? t('enabled') : t('disabled')),
-            }),
-          ),
+      return h(Page, {
+        title: t('title'),
+        version: s.version,
+        status: statusText,
+        desc: t('desc1') + t('desc2'),
+        toggle: h(Inline, { gap: '6px' },
+          h('span', { style: S.label }, s.settings.enabled ? t('enabled') : t('disabled')),
+          h(Toggle, {
+            on: s.settings.enabled,
+            label: t('togglePlugin'),
+            onChange: (v) => apply({ enabled: v }, v ? t('enabled') : t('disabled')),
+          }),
         ),
-        h('p', { style: S.desc }, t('desc1') + t('desc2')),
+        footer: t('foot1') + t('foot2'),
+        children: [
+          h(Card, {
+            children: [
 
         h(Row, {
           title: t('modeLabel'),
@@ -605,10 +728,12 @@ window.__ModuleLoader__.load({
             onChange: (value) => apply({ threshold: value }),
           })
           : null,
+            ],
+          }),
 
         // 条件渲染：关闭注入时不显示模板
         mode !== 'off'
-          ? h(TemplatePanel, {
+          ? h(Card, { children: h(TemplatePanel, {
             labels: {
               title: mode === 'everyTurn' ? t('templateLabel') : t('remindLabel'),
               aria: mode === 'everyTurn' ? t('templateAria') : t('remindLabel'),
@@ -638,12 +763,12 @@ window.__ModuleLoader__.load({
             onSave: async () => { await apply({ [field]: tpl }, tpl.trim() ? t('templateSaved') : t('templateCleared')) },
             onReset: () => { if (s.defaultTemplate) setTpl(s.defaultTemplate) },
             onPick: insertPlaceholder,
-          })
+          }) })
           : null,
 
-        msg ? h('div', { style: S.msg(msg.bad) }, msg.text) : null,
-        h('p', { style: S.foot }, t('foot1') + t('foot2')),
-      )
+          msg ? h(StatusLine, { state: msg.bad ? 'error' : 'saved', text: msg.text }) : null,
+        ],
+      })
     }
 
     // ═══ 7. 注册 ═══════════════════════════════════════════════════════
@@ -696,6 +821,17 @@ window.__ModuleLoader__.load({
           'settings.section',
         ),
         'context-usage-settings-section',
+      )
+
+      ctx.effect(
+        () => contribute(
+          ctx,
+          'settings.section.icon',
+          { name: 'settings.section.icon', id: 'context-usage' },
+          SettingsIcon,
+          'settings.section.icon',
+        ),
+        'context-usage-settings-icon',
       )
     }
 
